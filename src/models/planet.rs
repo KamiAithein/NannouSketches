@@ -31,7 +31,7 @@ impl Drawable for Planet {
             .start(Vec2::new(self.pos.x, self.pos.y))
             .end(Vec2::new(self.pos.x, self.pos.y) + Vec2::new(self.v.x, self.v.y) * 100.)
             .color(BLUE)
-            .stroke_weight(10.)
+            .stroke_weight(1.)
         ;
     }
 }

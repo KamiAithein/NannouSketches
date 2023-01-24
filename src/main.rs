@@ -44,23 +44,26 @@ fn model(_app: &App) -> Model {
         //     v: Vector3::new(1., 0., 0.)
         // },
     ];
-    // let pos_generator = || { 
-    //     let mut rng = rand::thread_rng();
-    //     rng.gen_range(-200.0..200.0)
-    // };
-    // let v_generator = || { 
-    //     let mut rng = rand::thread_rng();
-    //     rng.gen_range(-0.2..0.2) 
-    // };
-    // let mut rng = rand::thread_rng();
+    let pos_generator = || { 
+        let mut rng = rand::thread_rng();
+        rng.gen_range(-400.0..400.0)
+    };
+    let v_generator = || { 
+        let mut rng = rand::thread_rng();
+        rng.gen_range(-2.0..2.0) 
+    };
+    let mut rng = rand::thread_rng();
 
-    // for i in (0..50) {
-    //     planets.push(Planet {
-    //         pos: Vector3::new(pos_generator(), pos_generator(), pos_generator()),
-    //         r: rng.gen_range(5.0..30.0),
-    //         v: Vector3::new(v_generator(), v_generator(), v_generator())
-    //     })
-    // }
+    for _ in 0..200 {
+        planets.push(Planet {
+            pos: Vector3::new(pos_generator(), pos_generator(), pos_generator()),
+            r: rng.gen_range(3.0..8.0),
+            v: Vector3::new(v_generator(), v_generator(), v_generator()),
+            meta: PlanetMeta {
+                is_dead: false
+            },
+        })
+    }
 
     Model {
         state: State::Start,
@@ -102,7 +105,7 @@ fn handle_planets(model: &mut Model) {
             
             let dist_vec = planet2.pos - planet1.pos;
 
-            if dist_vec.magnitude() <= (planet1.r + planet2.r) / 2. {
+            if dist_vec.magnitude() <= (planet1.r + planet2.r) { // 0.9 error term
                 //on one pass the smaller will be seen
                 // the smaller will be set as dead
                 //on the second pass the larger will be seen
@@ -113,7 +116,7 @@ fn handle_planets(model: &mut Model) {
                     // conservation of momentum
                     planet1.v = (planet1.r * planet1.v + planet2.r * planet2.v) /
                                 (planet1.r + planet2.r);
-                    planet1.r += planet2.r.sqrt();
+                    planet1.r += planet2.r.sqrt().sqrt();
                 }
             } // touching
 
@@ -136,12 +139,9 @@ fn handle_planets(model: &mut Model) {
             planets.remove(i);
             
         } else {
+            planets[i].pos = planets[i].pos + planets[i].v * dt;
             i += 1;
         }
-    }
-
-    for planet in planets {
-        planet.pos = planet.pos + planet.v * dt;
     }
 
 }
@@ -242,7 +242,7 @@ fn view(app: &App, model: &Model, frame: Frame){
                 .start(Vec2::new(x, y))
                 .end(Vec2::new(app.mouse.x, app.mouse.y))
                 .color(BLUE)
-                .stroke_weight(10.)
+                .stroke_weight(1.)
             ;
         }
         _ => {}
