@@ -1,15 +1,21 @@
 mod models;
+use std::pin::Pin;
+
 use crate::models::{planet::Planet, planet::PlanetMeta, model::Model, model::State};
 
 mod traits;
 use crate::traits::{drawable::Drawable};
 
 extern crate nalgebra as na;
+use futures::Future;
+use futures::future::{join_all, JoinAll};
 use na::{Vector3, Unit, Vector2};
 
 use nannou::prelude::*;
 
 use rand::Rng;
+
+use futures::executor::block_on;
 
 static dt: f32 = 1.0;
 static g: f32 = 4.0;
@@ -88,66 +94,118 @@ fn a_from_planets(planet1: &Planet, planet2: &Planet) -> f32 {
     return a;
 }
 
-
-
-fn handle_planets(model: &mut Model) {
-    let planets = &mut model.planets;
-    let planets_view = planets.clone();
-
-    for planet1_i in 0..planets.len() {
+async fn handle_planet(mut planet1: Planet, planets_view: &Vec<Planet>) -> Planet {
+    for planet2_i in 0..planets_view.len() {
         
-        for planet2_i in 0..planets_view.len() {
-            if planet1_i == planet2_i { continue; }
-            
-            let planet1: &mut Planet = &mut planets[planet1_i];
-            let planet2 = planets_view[planet2_i];
+        let planet2 = planets_view[planet2_i];
+        
+        if planet1.pos == planet2.pos { continue; }
+        
+        let dist_vec = planet2.pos - planet1.pos;
 
-            
-            let dist_vec = planet2.pos - planet1.pos;
+        if dist_vec.magnitude() <= (planet1.r + planet2.r) { // 0.9 error term
+            //on one pass the smaller will be seen
+            // the smaller will be set as dead
+            //on the second pass the larger will be seen
+            // the larger will increase size
+            if planet1.r <= planet2.r {
+                planet1.meta.is_dead = true;
+            } else {
+                // conservation of momentum
+                planet1.v = (planet1.r * planet1.v + planet2.r * planet2.v) /
+                            (planet1.r + planet2.r);
+                planet1.r += planet2.r.sqrt().sqrt();
+            }
+        } // touching
 
-            if dist_vec.magnitude() <= (planet1.r + planet2.r) { // 0.9 error term
-                //on one pass the smaller will be seen
-                // the smaller will be set as dead
-                //on the second pass the larger will be seen
-                // the larger will increase size
-                if planet1.r <= planet2.r {
-                    planet1.meta.is_dead = true;
-                } else {
-                    // conservation of momentum
-                    planet1.v = (planet1.r * planet1.v + planet2.r * planet2.v) /
-                                (planet1.r + planet2.r);
-                    planet1.r += planet2.r.sqrt().sqrt();
-                }
-            } // touching
+        let dir_vec = Unit::new_normalize(dist_vec);
 
-            let dir_vec = Unit::new_normalize(dist_vec);
+        let a = a_from_planets(&planet1, &planet2);
 
-            let a = a_from_planets(&planet1, &planet2);
+        let a_vec = dir_vec.scale(a);
 
-            let a_vec = dir_vec.scale(a);
-
-            planet1.v = planet1.v + a_vec * dt;
-        }
+        planet1.v = planet1.v + a_vec * dt;
     }
 
-
-    // could be 1 loop
-
-    let mut i = 0;
-    while (i < planets.len()) {
-        if planets[i].meta.is_dead {
-            planets.remove(i);
-            
-        } else {
-            planets[i].pos = planets[i].pos + planets[i].v * dt;
-            i += 1;
-        }
-    }
+    return planet1;
 
 }
 
+fn handle_planets(planets: Vec<Planet>) -> Vec<Planet> {
+
+    let planets_view = planets.clone();
+
+    let mut waits: Vec<Pin<Box<dyn Future<Output=Planet>>>>  = vec![];
+    for planet in planets {
+        waits.push(
+            Box::pin(handle_planet(planet, &planets_view))
+        );
+    }
+    
+    let planets_new = block_on(join_all(waits));
+
+    return planets_new;
+    
+}
+
+// fn handle_planets(model: &mut Model) {
+//     let planets = &mut model.planets;
+//     let planets_view = planets.clone();
+
+//     for planet1_i in 0..planets.len() {
+        
+//         for planet2_i in 0..planets_view.len() {
+//             if planet1_i == planet2_i { continue; }
+            
+//             let planet1: &mut Planet = &mut planets[planet1_i];
+//             let planet2 = planets_view[planet2_i];
+
+            
+//             let dist_vec = planet2.pos - planet1.pos;
+
+//             if dist_vec.magnitude() <= (planet1.r + planet2.r) { // 0.9 error term
+//                 //on one pass the smaller will be seen
+//                 // the smaller will be set as dead
+//                 //on the second pass the larger will be seen
+//                 // the larger will increase size
+//                 if planet1.r <= planet2.r {
+//                     planet1.meta.is_dead = true;
+//                 } else {
+//                     // conservation of momentum
+//                     planet1.v = (planet1.r * planet1.v + planet2.r * planet2.v) /
+//                                 (planet1.r + planet2.r);
+//                     planet1.r += planet2.r.sqrt().sqrt();
+//                 }
+//             } // touching
+
+//             let dir_vec = Unit::new_normalize(dist_vec);
+
+//             let a = a_from_planets(&planet1, &planet2);
+
+//             let a_vec = dir_vec.scale(a);
+
+//             planet1.v = planet1.v + a_vec * dt;
+//         }
+//     }
+
+
+//     // could be 1 loop
+
+//     let mut i = 0;
+//     while (i < planets.len()) {
+//         if planets[i].meta.is_dead {
+//             planets.remove(i);
+            
+//         } else {
+//             planets[i].pos = planets[i].pos + planets[i].v * dt;
+//             i += 1;
+//         }
+//     }
+
+// }
+
 fn update(app: &App, model: &mut Model, _update: Update) {
-    handle_planets(model);
+    model.planets = handle_planets(model.planets.clone());
 
     
     // model.orbit = Vector3::new(app.mouse.x, app.mouse.y, 0.);
