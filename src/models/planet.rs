@@ -1,5 +1,5 @@
 extern crate nalgebra as na;
-use na::{Vector3, Unit};
+use na::{Vector2, Unit};
 
 use crate::traits::{drawable::Drawable};
 use crate::models::model::Model;
@@ -8,9 +8,9 @@ use nannou::prelude::*;
 
 #[derive (Clone, Copy, Debug)]
 pub struct Planet {
-    pub pos: Vector3<f32>,
+    pub pos: Vector2<f32>,
     pub r: f32,
-    pub v: Vector3<f32>,
+    pub v: Vector2<f32>,
     pub meta: PlanetMeta,
 }
 
@@ -23,13 +23,14 @@ impl Drawable for Planet {
     fn draw(&self, draw: &Draw) {
         draw
             .ellipse()
-            .xyz(Vec3::new(self.pos.x, self.pos.y, self.pos.z))
+            .xy(Vec2::new(self.pos.x, self.pos.y))
             .radius(self.r)
+            .color(Rgb::new((self.v.magnitude() * 10.) as u8 % 255,128_u8,0_u8))
         ;
         draw
             .arrow()
             .start(Vec2::new(self.pos.x, self.pos.y))
-            .end(Vec2::new(self.pos.x, self.pos.y) + Vec2::new(self.v.x, self.v.y) * 100.)
+            .end(Vec2::new(self.pos.x, self.pos.y) + Vec2::new(self.v.x, self.v.y) * 10.)
             .color(BLUE)
             .stroke_weight(1.)
         ;

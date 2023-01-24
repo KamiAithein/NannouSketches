@@ -1,4 +1,5 @@
 mod models;
+use std::cmp::{min, max};
 use std::pin::Pin;
 use std::thread;
 
@@ -20,7 +21,7 @@ use futures::executor::block_on;
 use rayon::prelude::{IntoParallelIterator, ParallelIterator};
 
 static dt: f32 = 0.1;
-static g: f32 = 0.5 ;
+static g: f32 = 1. ;
 
 fn main() {
     nannou::app(model)
@@ -58,15 +59,15 @@ fn model(_app: &App) -> Model {
     };
     let v_generator = || { 
         let mut rng = rand::thread_rng();
-        rng.gen_range(-10.0..10.0) 
+        rng.gen_range(-5.0..5.0) 
     };
     let mut rng = rand::thread_rng();
 
-    for _ in 0..300 {
+    for _ in 0..500 {
         planets.push(Planet {
-            pos: Vector3::new(pos_generator(), pos_generator(), pos_generator()),
-            r: rng.gen_range(3.0..8.0),
-            v: Vector3::new(v_generator(), v_generator(), v_generator()),
+            pos: Vector2::new(pos_generator(), pos_generator()),
+            r: rng.gen_range(1.0..4.0),
+            v: Vector2::new(v_generator(), v_generator()),
             meta: PlanetMeta {
                 is_dead: false
             },
@@ -147,18 +148,15 @@ fn handle_planets(planets: Vec<Planet>) -> Vec<Planet> {
         .map(|(planet, planet_view)| handle_planet(planet, planet_view))
         .collect();
     
-    let mut i = 0;
-    while i < planets_new.len() {
-        if planets_new[i].meta.is_dead {
-            planets_new.remove(i);
-            
-        } else {
-            planets_new[i].pos = planets_new[i].pos + planets_new[i].v * dt;
-            i += 1;
-        }
-    }
 
-    return planets_new;
+    planets_new
+        .into_iter()
+        .filter(|planet| !planet.meta.is_dead)
+        .map(|mut planet| {
+            planet.pos = planet.pos + planet.v * dt;
+            planet
+        })
+        .collect()
 
 
 }
@@ -240,12 +238,12 @@ fn handle_window_event(wevent: WindowEvent, app: &App, model: &mut Model) {
 
                     let dir_vec = Unit::new_normalize(edge - origin);
                     let v_pre = dir_vec.scale(v_rad);
-                    let v = Vector3::new (v_pre.x, v_pre.y, 0.);
+                    let v = Vector2::new (v_pre.x, v_pre.y);
                     
                     model.planets.push(Planet {
-                        pos: Vector3::new(x, y, 0.),
-                        r,
-                        v: v.scale(0.01),
+                        pos: Vector2::new(x, y),
+                        r: max(r as i32, 1) as f32,
+                        v: v.scale(0.1),
                         meta: PlanetMeta {
                             is_dead: false
                         },
@@ -292,7 +290,7 @@ fn event(app: &App, model: &mut Model, event: Event) {
 
 fn view(app: &App, model: &Model, frame: Frame){
     let draw = app.draw();
-    draw.background().color(PURPLE);
+    draw.background().color(BLACK);
 
     match model.state {
         State::CreateStart(x, y) => {
