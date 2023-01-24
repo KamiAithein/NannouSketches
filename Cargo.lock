@@ -1569,6 +1569,7 @@ dependencies = [
  "nalgebra",
  "nannou",
  "rand 0.8.5",
+ "rayon",
 ]
 
 [[package]]

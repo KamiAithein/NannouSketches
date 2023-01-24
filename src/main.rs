@@ -1,5 +1,6 @@
 mod models;
 use std::pin::Pin;
+use std::thread;
 
 use crate::models::{planet::Planet, planet::PlanetMeta, model::Model, model::State};
 
@@ -16,9 +17,10 @@ use nannou::prelude::*;
 use rand::Rng;
 
 use futures::executor::block_on;
+use rayon::prelude::{IntoParallelIterator, ParallelIterator};
 
-static dt: f32 = 1.0;
-static g: f32 = 4.0;
+static dt: f32 = 0.1;
+static g: f32 = 0.5 ;
 
 fn main() {
     nannou::app(model)
@@ -56,11 +58,11 @@ fn model(_app: &App) -> Model {
     };
     let v_generator = || { 
         let mut rng = rand::thread_rng();
-        rng.gen_range(-2.0..2.0) 
+        rng.gen_range(-10.0..10.0) 
     };
     let mut rng = rand::thread_rng();
 
-    for _ in 0..200 {
+    for _ in 0..300 {
         planets.push(Planet {
             pos: Vector3::new(pos_generator(), pos_generator(), pos_generator()),
             r: rng.gen_range(3.0..8.0),
@@ -78,10 +80,13 @@ fn model(_app: &App) -> Model {
 }
 
 
+fn area_from_planet(planet: &Planet) -> f32 {
+    PI * planet.r.pow(2)
+}
 
 // f = ma
 fn f_from_planets(planet1: &Planet, planet2: &Planet) -> f32 {
-    let top = g*(planet2.r * planet1.r);
+    let top = g*(area_from_planet(planet1) * area_from_planet(planet2));
     let bot = planet1.pos.metric_distance(&planet2.pos).pow(2);
     if bot - 0.0_f32 < 0.001_f32 {
         return 0.0; // just in case
@@ -94,12 +99,12 @@ fn a_from_planets(planet1: &Planet, planet2: &Planet) -> f32 {
     return a;
 }
 
-async fn handle_planet(mut planet1: Planet, planets_view: &Vec<Planet>) -> Planet {
+fn handle_planet(mut planet1: Planet, planets_view: Vec<Planet>) -> Planet {
     for planet2_i in 0..planets_view.len() {
         
         let planet2 = planets_view[planet2_i];
         
-        if planet1.pos == planet2.pos { continue; }
+        if (planet1.pos - planet2.pos).magnitude() < 0.00001 { continue; } //touching
         
         let dist_vec = planet2.pos - planet1.pos;
 
@@ -114,7 +119,7 @@ async fn handle_planet(mut planet1: Planet, planets_view: &Vec<Planet>) -> Plane
                 // conservation of momentum
                 planet1.v = (planet1.r * planet1.v + planet2.r * planet2.v) /
                             (planet1.r + planet2.r);
-                planet1.r += planet2.r.sqrt().sqrt();
+                planet1.r = ((planet1.r.pow(2) + planet2.r.pow(2)) as f32) .sqrt();
             }
         } // touching
 
@@ -132,20 +137,30 @@ async fn handle_planet(mut planet1: Planet, planets_view: &Vec<Planet>) -> Plane
 }
 
 fn handle_planets(planets: Vec<Planet>) -> Vec<Planet> {
-
-    let planets_view = planets.clone();
-
-    let mut waits: Vec<Pin<Box<dyn Future<Output=Planet>>>>  = vec![];
-    for planet in planets {
-        waits.push(
-            Box::pin(handle_planet(planet, &planets_view))
-        );
-    }
     
-    let planets_new = block_on(join_all(waits));
+    let planets_view = planets.clone();
+    let mut planets_new: Vec<Planet> = planets
+        .into_iter()
+        .map(|planet| (planet, planets_view.clone()))
+        .collect::<Vec<(Planet, Vec<Planet>)>>()
+        .into_par_iter()
+        .map(|(planet, planet_view)| handle_planet(planet, planet_view))
+        .collect();
+    
+    let mut i = 0;
+    while i < planets_new.len() {
+        if planets_new[i].meta.is_dead {
+            planets_new.remove(i);
+            
+        } else {
+            planets_new[i].pos = planets_new[i].pos + planets_new[i].v * dt;
+            i += 1;
+        }
+    }
 
     return planets_new;
-    
+
+
 }
 
 // fn handle_planets(model: &mut Model) {
