@@ -20,17 +20,20 @@ pub struct PlanetMeta {
 }
 
 impl Drawable for Planet {
-    fn draw(&self, draw: &Draw) {
+    fn draw(&self, draw: &Draw, model: &Model) {
+        let offset = -model.com;
+        let pos = self.pos + offset;
+        
         draw
             .ellipse()
-            .xy(Vec2::new(self.pos.x, self.pos.y))
+            .xy(Vec2::new(pos.x, pos.y))
             .radius(self.r)
             .color(Rgb::new((self.v.magnitude() * 10.) as u8 % 255,128_u8,0_u8))
         ;
         draw
             .arrow()
-            .start(Vec2::new(self.pos.x, self.pos.y))
-            .end(Vec2::new(self.pos.x, self.pos.y) + Vec2::new(self.v.x, self.v.y) * 10.)
+            .start(Vec2::new(pos.x, pos.y))
+            .end(Vec2::new(pos.x, pos.y) + Vec2::new(self.v.x, self.v.y) * 10.)
             .color(BLUE)
             .stroke_weight(1.)
         ;
